@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -104,14 +105,24 @@ func CreateJWK(bytes []byte) (jwk JWK) {
 		privateKeyBytes = secondHalf
 	}
 
+	publicKey := base64.RawURLEncoding.EncodeToString(publicKeyBytes)
+
 	return JWK{
 		KTY: "OKP",
 		CRV: "Ed25519",
-		X:   base64.RawURLEncoding.EncodeToString(publicKeyBytes),
+		X:   publicKey,
 		D:   base64.RawURLEncoding.EncodeToString(privateKeyBytes),
 		Use: "sig",
-		KID: "",
+		KID: CreateKID(publicKey),
 	}
+}
+
+// https://tools.ietf.org/html/rfc7638
+// https://tools.ietf.org/html/rfc8037#appendix-A.3
+func CreateKID(publicKey string) string {
+	canonical := `{"crv":"Ed25519","kty":"OKP","x":"` + publicKey + `"}`
+	hash := sha256.Sum256([]byte(canonical))
+	return base64.RawURLEncoding.EncodeToString(hash[:])
 }
 
 func PrintJWK(jwk JWK) {
