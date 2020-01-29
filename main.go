@@ -10,31 +10,58 @@ import (
 )
 
 var (
-	encodeOutput = kingpin.Flag("base64", "Encode the output in base64.").Short('e').Bool()
-	jwkInput     = kingpin.Flag("JWK", "The JWK to convert").String()
-	bytesInput   = kingpin.Flag("bytes", "The private key bytes to parse").HexBytes()
+	encodeOutput     = kingpin.Flag("base64", "Encode the output in base64.").Short('e').Bool()
+	interchangeInput = kingpin.Flag("interchange", "The JWK to convert, but in interchange format").String()
+	jwkInput         = kingpin.Flag("jwk", "The JWK to convert").String()
+	bytesInput       = kingpin.Flag("bytes", "The private key bytes to parse").HexBytes()
 )
 
 func main() {
 	kingpin.Version("0.0.1")
 	kingpin.Parse()
-	if *jwkInput != "" && len(*bytesInput) != 0 {
-		fmt.Println("You cannot use both JWK and bytes flags at the same time.")
+	if !GuardInputOkay(*interchangeInput, *jwkInput, *bytesInput) {
+		fmt.Println("You must provide 1 and only 1 input type.")
+		return
+	}
+	if *interchangeInput != "" {
+		jwkJSON, _ := base64.RawURLEncoding.DecodeString(*interchangeInput)
+		ConvertJWKFromJSONAndPrintBytes(string(jwkJSON))
 		return
 	}
 	if *jwkInput != "" {
-		jwk, err := ConvertJson(*jwkInput)
-		if err != nil {
-			return
-		}
-		keyBytes := ConvertJWKToBytes(jwk)
-		PrintBytes(keyBytes)
+		ConvertJWKFromJSONAndPrintBytes(*jwkInput)
 		return
 	}
 	if len(*bytesInput) != 0 {
 		PrintJWK(CreateJWK(*bytesInput))
 		return
 	}
+}
+
+func GuardInputOkay(interchange, jwk string, bytes []byte) bool {
+	setCount := 0
+	if interchange != "" {
+		setCount++
+	}
+	if jwk != "" {
+		setCount++
+	}
+	if len(bytes) != 0 {
+		setCount++
+	}
+	if setCount != 1 {
+		return false
+	}
+	return true
+}
+
+func ConvertJWKFromJSONAndPrintBytes(json string) {
+	jwk, err := ConvertJson(json)
+	if err != nil {
+		return
+	}
+	keyBytes := ConvertJWKToBytes(jwk)
+	PrintBytes(keyBytes)
 }
 
 func ConvertJson(jsonInput string) (jwk JWK, err error) {
@@ -60,8 +87,13 @@ func PrintBytes(bytes []byte) {
 }
 
 func CreateJWK(bytes []byte) (jwk JWK) {
-	privateKeyBytes := bytes[:32]
-	publicKeyBytes := bytes[32:]
+	firstHalf, privateKeyBytes := bytes[:32], bytes[:32]
+	secondHalf, publicKeyBytes := bytes[32:], bytes[32:]
+
+	if len(secondHalf) == 0 {
+		publicKeyBytes = firstHalf
+		privateKeyBytes = secondHalf
+	}
 
 	return JWK{
 		KTY: "OKP",
