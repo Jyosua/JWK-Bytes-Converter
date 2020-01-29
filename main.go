@@ -10,16 +10,17 @@ import (
 )
 
 var (
-	encodeOutput     = kingpin.Flag("base64", "Encode the output in base64.").Short('e').Bool()
-	interchangeInput = kingpin.Flag("interchange", "The JWK to convert, but in interchange format").String()
-	jwkInput         = kingpin.Flag("jwk", "The JWK to convert").String()
-	bytesInput       = kingpin.Flag("bytes", "The private key bytes to parse").HexBytes()
+	encodeOutput      = kingpin.Flag("base64", "Encode the output in base64.").Short('e').Bool()
+	interchangeInput  = kingpin.Flag("interchange", "The JWK to convert, but in interchange format.").String()
+	jwkInput          = kingpin.Flag("jwk", "The JWK to convert.").String()
+	bytesInput        = kingpin.Flag("bytes", "The public or private key bytes to parse.").HexBytes()
+	encodedBytesInput = kingpin.Flag("b64bytes", "The public or private key bytes to parse, but encoded in base64.").String()
 )
 
 func main() {
 	kingpin.Version("0.0.1")
 	kingpin.Parse()
-	if !GuardInputOkay(*interchangeInput, *jwkInput, *bytesInput) {
+	if !GuardInputOkay(*interchangeInput, *jwkInput, *encodedBytesInput, *bytesInput) {
 		fmt.Println("You must provide 1 and only 1 input type.")
 		return
 	}
@@ -32,18 +33,26 @@ func main() {
 		ConvertJWKFromJSONAndPrintBytes(*jwkInput)
 		return
 	}
+	if *encodedBytesInput != "" {
+		keyBytes, _ := base64.RawURLEncoding.DecodeString(*encodedBytesInput)
+		PrintJWK(CreateJWK(keyBytes))
+		return
+	}
 	if len(*bytesInput) != 0 {
 		PrintJWK(CreateJWK(*bytesInput))
 		return
 	}
 }
 
-func GuardInputOkay(interchange, jwk string, bytes []byte) bool {
+func GuardInputOkay(interchange, jwk, encodedBytes string, bytes []byte) bool {
 	setCount := 0
 	if interchange != "" {
 		setCount++
 	}
 	if jwk != "" {
+		setCount++
+	}
+	if encodedBytes != "" {
 		setCount++
 	}
 	if len(bytes) != 0 {
